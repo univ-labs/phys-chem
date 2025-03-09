@@ -18,22 +18,27 @@ def get_dataset():
     return inputs, outputs
 
 
-def normalize_data(X):
-    nX = X.copy()
-    minsX = []
-    maxsX = []
-    for j in range(0, X.shape[1]):
-        min_val = min(X[:, j])
-        max_val = max(X[:, j])
-        minsX.append(min_val)
-        maxsX.append(max_val)
+def normalize_data(x):
+    x_n = x.copy()
+
+    for j in range(0, x.shape[1]):
+        min_val = min(x[:, j])
+        max_val = max(x[:, j])
 
         if max_val == min_val:
-            nX[:, j] = 0.5
+            x_n[:, j] = 0.5
         else:
-            for i in range(X.shape[0]):
-                nX[i, j] = (X[i, j] - min_val) / (max_val - min_val) * 0.9 + 0.1
-    return nX, minsX, maxsX
+            for i in range(x.shape[0]):
+                x_n[i, j] = (x[i, j] - min_val) / (max_val - min_val) * 0.9 + 0.1
+    return x_n
+
+
+def denormalize_data(x_n, min_x, max_x):
+    den_x = x_n.copy()
+    for j in range(0, x_n.shape[1]):
+        for i in range(0, x_n.shape[0]):
+            den_x[i, j] = ((x_n[i, j] - 0.1) / 0.9) * (max_x[j] - min_x[j]) + min_x[j]
+    return den_x
 
 
 def get_model(n_inputs, n_outputs):
@@ -92,55 +97,65 @@ def evaluate_model(X, y):
     return mae, mape, model2
 
 
-def denormalize_data(x, minsX, maxsX):
-    dX = x.copy()
-    for j in range(0, x.shape[1]):
-        for i in range(0, x.shape[0]):
-            dX[i, j] = ((x[i, j] - 0.1) / 0.9) * (maxsX[j] - minsX[j]) + minsX[j]
-    return dX
+def mae(y_exp, y_pred):
+    return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
 
 
 if __name__ == '__main__':
     x, y = get_dataset()
-    x, minsX, maxsX = normalize_data(x)
-    y, minsY, maxsY = normalize_data(y)
+    x_min = x.min(axis=0)
+    x_max = x.max(axis=0)
+    y_min = y.min(axis=0)
+    y_max = y.max(axis=0)
+
+    x_norm = normalize_data(x)
+    y_norm = normalize_data(y)
 
     model = load_model('lab3ML.keras')
 
-    # mae, mape, model = evaluate_model(x, y)
+    # mae, mape, model = evaluate_model(x_norm, y_norm)
     # model.save('lab3ML.keras')
     # print('MAE: %.3f MAPE: %.3f' % (mae, mape))
 
-    new_y = model.predict(x)
+    new_y = model.predict(x_norm)
 
-    dnX = denormalize_data(x, minsX, maxsX)
-    dny = denormalize_data(y, minsY, maxsY)
-    new_y = denormalize_data(new_y, minsY, maxsY)
-
-    def mae(y_exp, y_pred):
-        return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
-
+    dnX = denormalize_data(y_norm, x_min, x_max)
+    dny = denormalize_data(y_norm, y_min, y_max)
+    new_y = denormalize_data(new_y, y_min, y_max)
 
     print('Density MAE ', mae(dny[:, 0], new_y[:, 0]))
 
-    plt.figure(figsize=(6, 6))
-    plt.plot(dny, new_y, '.', label="Predicted vs Actual")
-    plt.plot([min(dny), max(dny)], [min(dny), max(dny)], 'r-', label="Ideal Line")
-    plt.xlabel("Actual Thermal conductivity")
-    plt.ylabel("Predicted Thermal conductivity")
+    P_target = 0.1
+    T_target = 320
+
+    x_target = np.array([[T_target, P_target]])
+
+    x_target_norm = x_target.copy()
+
+    for j in range(0, x_target_norm.shape[1]):
+        min_val = min(x[:, j])
+        max_val = max(x[:, j])
+
+        if max_val == min_val:
+            x_target_norm[:, j] = 0.5
+        else:
+            for i in range(x_target_norm.shape[0]):
+                x_target_norm[i, j] = (x_target_norm[i, j] - min_val) / (max_val - min_val) * 0.9 + 0.1
+
+    y_target_norm = model.predict(x_target_norm)
+    y_target = denormalize_data(y_target_norm, y_min, y_max)
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(x[:, 0], y[:, 0], label="Экспериментальные данные", color='red')
+    plt.plot(x[:, 0], new_y[:, 0], label="Предсказание модели", linestyle='-', color='blue')
+    plt.scatter(T_target, y_target, label=f"Предсказанное значение при T={T_target}K", color='green',
+                marker='o', s=100)
+
+    plt.title(f"Зависимость Теплоемкости от Температуры при P={P_target} бар")
+    plt.xlabel("Температура, [K]")
+    plt.ylabel("Теплоемкость, []")
     plt.legend()
     plt.grid(True)
     plt.show()
 
-    # for P in 100, 50, 10, 1:
-    #     i = i + 1
-    #     Xa, yn = get_data_at_P(P)
-    #     Xn = normalize_data_old_range(Xa, minsX, maxsX)
-    #     new_y_at_P = model.predict(Xn)
-    #     new_y_at_P = denormalize_data(new_y_at_P, minsY, maxsY)
-    #     plt.figure(i)
-    #     plt.title("P = %d" % P)
-    #     plt.plot(Xa[:, 0], yn[:, 0], c=cmap(i * 2 - 4), label="exp., P = %d" % P)
-    #     plt.plot(Xa[:, 0], new_y_at_P[:, 0], c=cmap(i * 2 - 3), label="model, P = % d" % P)
-    #     plt.ylabel("Density, kg/m^3")
-    #     plt.xlabel("Temperature, K")
+    print(f"Предсказанное значение при T={T_target}K, P={P_target} бар: {y_target[0, 0]:.3f}")
