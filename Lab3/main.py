@@ -97,10 +97,6 @@ def evaluate_model(X, y):
     return mae, mape, model2
 
 
-def mae(y_exp, y_pred):
-    return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
-
-
 if __name__ == '__main__':
     x, y = get_dataset()
     x_min = x.min(axis=0)
@@ -111,10 +107,10 @@ if __name__ == '__main__':
     x_norm = normalize_data(x)
     y_norm = normalize_data(y)
 
-    model = load_model('lab3ML.keras')
+    model = load_model('lab3MLnew.keras')
 
     # mae, mape, model = evaluate_model(x_norm, y_norm)
-    # model.save('lab3ML.keras')
+    # model.save('lab3MLnew.keras')
     # print('MAE: %.3f MAPE: %.3f' % (mae, mape))
 
     new_y = model.predict(x_norm)
@@ -123,7 +119,21 @@ if __name__ == '__main__':
     dny = denormalize_data(y_norm, y_min, y_max)
     new_y = denormalize_data(new_y, y_min, y_max)
 
-    print('Density MAE ', mae(dny[:, 0], new_y[:, 0]))
+
+    def mae(y_exp, y_pred):
+        return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
+
+
+    print('Thermal conductivity MAE ', mae(dny[:, 0], new_y[:, 0]))
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(dny, new_y, '.', label="Predicted vs Actual")
+    plt.plot([min(dny), max(dny)], [min(dny), max(dny)], 'r-', label="Ideal Line")
+    plt.xlabel("Actual Thermal conductivity")
+    plt.ylabel("Predicted Thermal conductivity")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
     P_target = 0.1
     T_target = 320
@@ -151,9 +161,9 @@ if __name__ == '__main__':
     plt.scatter(T_target, y_target, label=f"Предсказанное значение при T={T_target}K", color='green',
                 marker='o', s=100)
 
-    plt.title(f"Зависимость Теплоемкости от Температуры при P={P_target} бар")
+    plt.title(f"Зависимость теплопроводности от температуры при P={P_target * 10} бар")
     plt.xlabel("Температура, [K]")
-    plt.ylabel("Теплоемкость, []")
+    plt.ylabel("Теплопроводность, [мВт/м/К]")
     plt.legend()
     plt.grid(True)
     plt.show()
