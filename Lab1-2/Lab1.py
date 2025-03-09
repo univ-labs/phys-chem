@@ -37,4 +37,6 @@ def find_reaction_enthalpy(reaction: Reaction, h_calc: float):
     graphic.show_and_save(filepath='pics/H(T).png')
 
 
+"""Экзотермическая реакция, выделение тепла"""
+
 find_reaction_enthalpy(r, h_calc=-146608)
