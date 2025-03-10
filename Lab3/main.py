@@ -12,9 +12,10 @@ def get_dataset():
     # x: samples * inputs
     # y: samples * outputs
 
-    data = pd.read_excel("DataSet.xlsx", engine="openpyxl")
-    inputs = data[['Temperature', 'Pressure']][1:].to_numpy(dtype=float)
-    outputs = data[["Thermal conductivity"]][1:].to_numpy(dtype=float)
+    data = pd.read_csv("data.csv")
+    inputs = data[['Temperature', 'Pressure']].to_numpy()
+    outputs = data[["Thermal conductivity"]].to_numpy()
+    print(inputs, outputs)
     return inputs, outputs
 
 
@@ -24,6 +25,7 @@ def normalize_data(x):
     for j in range(0, x.shape[1]):
         min_val = min(x[:, j])
         max_val = max(x[:, j])
+        print(min_val)
 
         if max_val == min_val:
             x_n[:, j] = 0.5
@@ -97,6 +99,10 @@ def evaluate_model(X, y):
     return mae, mape, model2
 
 
+def mae(y_exp, y_pred):
+    return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
+
+
 if __name__ == '__main__':
     x, y = get_dataset()
     x_min = x.min(axis=0)
@@ -107,10 +113,11 @@ if __name__ == '__main__':
     x_norm = normalize_data(x)
     y_norm = normalize_data(y)
 
-    model = load_model('lab3MLnew.keras')
+    model = load_model('model.keras')
+    # MAE: 0.057 MAPE: 8.428
 
     # mae, mape, model = evaluate_model(x_norm, y_norm)
-    # model.save('lab3MLnew.keras')
+    # model.save('model.keras')
     # print('MAE: %.3f MAPE: %.3f' % (mae, mape))
 
     new_y = model.predict(x_norm)
@@ -118,11 +125,6 @@ if __name__ == '__main__':
     dnX = denormalize_data(y_norm, x_min, x_max)
     dny = denormalize_data(y_norm, y_min, y_max)
     new_y = denormalize_data(new_y, y_min, y_max)
-
-
-    def mae(y_exp, y_pred):
-        return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
-
 
     print('Thermal conductivity MAE ', mae(dny[:, 0], new_y[:, 0]))
 
@@ -135,7 +137,7 @@ if __name__ == '__main__':
     plt.grid(True)
     plt.show()
 
-    P_target = 0.1
+    P_target = 1
     T_target = 320
 
     x_target = np.array([[T_target, P_target]])

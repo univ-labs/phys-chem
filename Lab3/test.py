@@ -1,6 +1,8 @@
+import numpy as np
 import pandas as pd
 from keras import optimizers, Sequential
 from keras.src.layers import Dense
+from keras.src.saving import load_model
 from matplotlib import pyplot as plt
 from numpy import mean
 from sklearn.model_selection import RepeatedKFold
@@ -10,11 +12,10 @@ def get_dataset():
     # X: samples * inputs
     # y: samples * outputs
 
-    data = pd.read_csv("/content/drive/MyDrive/Colab Notebooks/data_butane.csv")
-    # data=data[data["GL"]==0]
-    X = data[["Temperature", "Pressure"]].to_numpy()
-    y = data[["Density"]].to_numpy()  # ,"GL"
-    return X, y
+    data = pd.read_csv("data.csv")
+    inputs = data[['Temperature', 'Pressure']].to_numpy()
+    outputs = data[["Thermal conductivity"]].to_numpy()
+    return inputs, outputs
 
 
 # get the model
@@ -74,15 +75,21 @@ def evaluate_model(X, y):
     return mae, mape, model2
 
 
-def normalize_data(X):
-    nX = X.copy();
-    minsX = []
-    maxsX = []
+def normalize_data(X, minsX=None, maxsX=None):
+    nX = X.copy()
+    if minsX is None or maxsX is None:
+        minsX = []
+        maxsX = []
+        for j in range(0, X.shape[1]):
+            minsX.append(min(X[:, j]))
+            maxsX.append(max(X[:, j]))
+
     for j in range(0, X.shape[1]):
-        minsX.append(min(X[:, j]))
-        maxsX.append(max(X[:, j]))
         for i in range(0, X.shape[0]):
-            nX[i, j] = (X[i, j] - minsX[j]) / (maxsX[j] - minsX[j]) * 0.9 + 0.1
+            if maxsX[j] == minsX[j]:
+                nX[i, j] = 0.5
+            else:
+                nX[i, j] = (X[i, j] - minsX[j]) / (maxsX[j] - minsX[j]) * 0.9 + 0.1
     return nX, minsX, maxsX
 
 
@@ -98,25 +105,59 @@ def denormalize_data(X, minsX, maxsX):
 X, y = get_dataset()
 X, minsX, maxsX = normalize_data(X)
 y, minsy, maxsy = normalize_data(y)
-# print(X)
-# print(y)
+
 # evaluate model
-mae, mape, model = evaluate_model(X, y)
-model.save('/content/drive/MyDrive/Colab Notebooks/Lab2_ML_Butane.keras')
-print('MAE: %.3f MAPE: %.3f' % (mae, mape))
+# mae, mape, model = evaluate_model(X, y)
+# model.save('test_model.keras')
+# print('MAE: %.3f MAPE: %.3f' % (mae, mape))
+model = load_model('test_model.keras')
 
 new_y = model.predict(X)
 dnX = denormalize_data(X, minsX, maxsX)
 dny = denormalize_data(y, minsy, maxsy)
 new_y = denormalize_data(new_y, minsy, maxsy)
-print(dny.shape)
 
 
 def mae(y_exp, y_pred):
-    print([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
-    return mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
+    return np.mean([abs(y_exp[i] - y_pred[i]) for i in range(0, y_exp.shape[0])])
 
 
-print('Density MAE ', mae(dny[:, 0], new_y[:, 0]))
-plt.axline((0, 0), slope=1, color='r')
-plt.plot(dny, new_y, '.')
+print('Thermal conductivity MAE ', mae(dny[:, 0], new_y[:, 0]))
+
+plt.figure(figsize=(6, 6))
+plt.plot(dny, new_y, '.', label="Predicted vs Actual")
+plt.plot([min(dny), max(dny)], [min(dny), max(dny)], 'r-', label="Ideal Line")
+plt.xlabel("Actual Thermal conductivity")
+plt.ylabel("Predicted Thermal conductivity")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+P_target = 1.0
+T_target = 320.0
+
+mask = dnX[:, 1] == P_target
+x = dnX[mask]
+y = dny[mask]
+new_y = new_y[mask]
+
+x_target = np.array([[T_target, P_target]])
+x_target_norm, _, _ = normalize_data(x_target, minsX, maxsX)
+
+y_target_norm = model.predict(x_target_norm)
+y_target = denormalize_data(y_target_norm, minsy, maxsy)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(x[:, 0], y[:, 0], label="Экспериментальные данные", color='red')
+plt.plot(x[:, 0], new_y[:, 0], label="Предсказание модели", linestyle='-', color='blue')
+plt.scatter(T_target, y_target, label=f"Предсказанное значение при T={T_target}K", color='green',
+            marker='o', s=100)
+
+plt.title(f"Зависимость теплопроводности от температуры при P={P_target} бар")
+plt.xlabel("Температура, [K]")
+plt.ylabel("Теплопроводность, [мВт/м/К]")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+print(f"Предсказанное значение при T={T_target}K, P={P_target} бар: {y_target[0, 0]:.3f}")
