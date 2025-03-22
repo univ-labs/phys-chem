@@ -3,7 +3,6 @@ from keras.src.saving import load_model
 from matplotlib import pyplot as plt
 
 from Lab3.data import get_dataset, normalize_data, denormalize_data, mae
-from Lab3.model import evaluate_model
 
 P_target = 1.0
 T_target = 320.0
