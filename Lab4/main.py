@@ -1,78 +1,94 @@
-from math import log, exp
+import matplotlib.pyplot as plt
+import numpy as np
 from scipy.optimize import minimize
 
 """20. Метанол + этилацетат"""
 
-T = 298.15
 R = 8.314
+T = 298.15
 
 # VLE
-x1 = [0.1, 0.3, 0.5, 0.7, 0.9]
-y1 = [0.276, 0.454, 0.579, 0.64, 0.828]
-P = [0.1615, 0.1887, 0.1977, 0.1982, 0.1860]
-
-n = len(x1)
+x1 = np.array([0.1, 0.3, 0.5, 0.7, 0.9])
+y1 = np.array([0.276, 0.454, 0.579, 0.64, 0.828])
+P = np.array([0.1615, 0.1887, 0.1977, 0.1982, 0.1860])
 
 # Params
-A = 18.59, 16.15
-B = 3626.55, 2790.50
-C = -34.29, -57.15
-
-Tc = 512.60, 523.20
-Pc = 80.96, 38.30
-W = 0.56, 0.36
+A1, B1, C1 = 18.59, 3626.55, -34.29
+A2, B2, C2 = 16.15, 2790.50, -57.15
 
 
+# Функция для расчета давления насыщения
 def antoine_equation(a, b, c, t):
-    return exp(a - b / (t + c)) / 750.062
+    return np.exp(a - b / (t + c)) / 750.062
 
 
-# def calculate_molar_volumes(tc, pc, w):
-#     z_ra = lambda omega: 0.29056 - 0.08775 * omega
-#     return R * tc / pc * z_ra(w)
+# Функция для расчета коэффициентов активности
+def calculate_activity_coefficients():
+    g1 = y1 * P / (P1_0 * x1)
+    g2 = y2 * P / (P2_0 * x2)
+    g_exp = (R * T) * (x1 * np.log(g1) + x2 * np.log(g2))
+    return g1, g2, g_exp
 
 
-def func(params):
-    global g_exp, x1, x2
-    lambda12, lambda21 = params
-    res = 0.0
+def wilson_func(params, x1, x2, g_exp):
+    lam12, lam21 = params
+    g_calc = (R * T) * (-x1 * np.log(x1 + lam12 * x2) - x2 * np.log(lam21 * x1 + x2))
+    return np.sum(np.abs(g_exp - g_calc))
 
-    for j in range(len(x1)):
-        # Расчет избыточной энергии Гиббса по модели Вильсона
-        g_calc = -R * T * (x1[j] * log(x1[j] + lambda12 * x2[j]) + x2[j] * log(x2[j] + lambda21 * x1[j]))
-        res += abs(g_calc - g_exp[j])  # Сумма абсолютных отклонений
-    return res
+
+# Функция для построения графиков
+def plot_diagrams():
+    plt.figure(figsize=(9, 6))
+
+    plt.plot(x1_range, p_total, label='Модель ассоциации')
+    plt.plot(y1_calc, p_total, label='Модель ассоциации')
+    plt.scatter(x1, P, color='red', label='Экспериментальные данные')
+    plt.xlabel('X (метанол)')
+    plt.ylabel('Давление (бар)')
+    plt.title('P-xy диаграмма системы "метанол + этилацетат" при T = 298.15 K')
+    plt.legend()
+    plt.grid()
+
+    # plt.subplot(1, 2, 2)
+    # plt.plot(x1_range, y1_calc, label='Calculated y1')
+    # plt.plot(x1_range, x1_range, label='x = y', color='black', linestyle='--')
+    # plt.scatter(x1, y1, color='blue', label='Экспериментальные данные')
+    # plt.xlabel('Mole Fraction of Acetone in Liquid (x1)')
+    # plt.ylabel('Mole Fraction of Acetone in Vapor (y1)')
+    # plt.title('y-x диаграмма системы "метанол + этилацетат" при T = 298.15 K')
+    # plt.legend()
+    # plt.grid()
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
     # 1. Рассчитать по уравнению Антуана
-    P1_0, P2_0 = antoine_equation(A[0], B[0], C[0], T), antoine_equation(A[1], B[1], C[1], T)
+    P1_0 = antoine_equation(A1, B1, C1, T)
+    P2_0 = antoine_equation(A2, B2, C2, T)
 
     # 2. Выразить из основного уравнения подхода
-    gamma1, gamma2 = [], []
-    x2, y2 = [], []
+    x2, y2 = 1 - x1, 1 - y1
+    gam1, gam2, gE_exp = calculate_activity_coefficients()
 
-    for i in range(len(x1)):
-        x2.append(1 - x1[i])
-        y2.append(1 - y1[i])
+    initial_guess = [0.1, 0.1]
+    result = minimize(wilson_func, np.array(initial_guess), args=(x1, x2, gE_exp), method='Nelder-Mead', tol=1e-6)
 
-        gamma1.append(y1[i] * P[i] / (P1_0 * x1[i]))
-        gamma2.append(y2[i] * P[i] / (P2_0 * x2[i]))
+    lambda12, lambda21 = result.x
+    print("Оптимизированные параметры модели Вильсона:")
+    print(f'{lambda12 = } {lambda21 = }')
 
-    # 3. Для каждой точки рассчитать экспериментальную избыточную мольную энергию Гиббса
-    g_exp = []
-    for i in range(len(x1)):
-        g_exp.append(R * T * (x1[i] * log(gamma1[i]) + x2[i] * log(gamma2[i])))
+    x1_range = np.linspace(0, 1, 100)
+    x2_range = 1 - x1_range
 
-    # 4. Подобрать такие Λ12 и Λ21, чтобы разница в избыточной энергии Гиббса между
-    # эксп. и расчетной (Вильсон) была минимальна
-    res = minimize(func, [0.1, 0.1], method='Nelder-Mead', tol=1e-6)
+    gamma1 = np.exp(-np.log(x1_range + lambda12 * x2_range) + x2_range * (
+            lambda12 / (x1_range + lambda12 * x2_range) - lambda21 / (lambda21 * x1_range + x2_range)))
+    gamma2 = np.exp(-np.log(x2_range + lambda21 * x1_range) - x1_range * (
+            lambda12 / (x1_range + lambda12 * x2_range) - lambda21 / (lambda21 * x1_range + x2_range)))
 
-    print(res.message)
-    # print(res.x)
+    p_total = x1_range * gamma1 * P1_0 + x2_range * gamma2 * P2_0
+    y1_calc = (x1_range * gamma1 * P1_0) / p_total
+    y2_calc = (x2_range * gamma2 * P2_0) / p_total
 
-    for i in range(len(x1)):
-        print(res.x * x1[i] * x2[i])
-
-    # Сделать график
-    # Какие-то изменения
+    plot_diagrams()
